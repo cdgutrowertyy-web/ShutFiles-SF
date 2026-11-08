@@ -1,9 +1,16 @@
 import os
 import sys
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox
 
 import crypto_core as core
+
+
+def resource_path(rel):
+    if getattr(sys, "frozen", False):
+        return os.path.join(sys._MEIPASS, rel)
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), rel)
+
 
 BG_DARK = "#1a1a1a"
 BG_PANEL = "#222222"
@@ -15,23 +22,20 @@ PROGRAM_NAME = "ShutFiles"
 
 
 def register_windows_context_menu():
-    """
-    Прописывает программу в контекстное меню Windows для всех файлов:
-    HKEY_CLASSES_ROOT\\*\\shell\\ShutFiles
-    """
     if os.name != "nt":
         return False
     try:
         import winreg
-        python_exe = sys.executable
-        script_path = os.path.abspath(__file__)
-        command = f'"{python_exe}" "{script_path}" "%1"'
+        if getattr(sys, "frozen", False):
+            command = f'"{sys.executable}" "%1"'
+        else:
+            command = f'"{sys.executable}" "{os.path.abspath(__file__)}" "%1"'
 
         base_path = r"*\shell\ShutFiles"
         with winreg.CreateKey(winreg.HKEY_CLASSES_ROOT, base_path) as key:
             winreg.SetValueEx(key, "MUIVerb", 0, winreg.REG_SZ,
                               "Заблокировать/Разблокировать в SF")
-            winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, python_exe)
+            winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, sys.executable)
 
         with winreg.CreateKey(winreg.HKEY_CLASSES_ROOT, base_path + r"\command") as key:
             winreg.SetValueEx(key, "", 0, winreg.REG_SZ, command)
@@ -42,9 +46,13 @@ def register_windows_context_menu():
 
 
 class ShutFilesApp(tk.Tk):
-    def __init__(self, initial_file: str = None):
+    def __init__(self, initial_file=None):
         super().__init__()
         self.title("ShutFiles — SF")
+        try:
+            self.iconbitmap(resource_path("assets/sf.ico"))
+        except Exception:
+            pass
         self.geometry("980x620")
         self.configure(bg=BG_DARK)
         self.minsize(820, 520)
@@ -56,7 +64,6 @@ class ShutFilesApp(tk.Tk):
         if initial_file and os.path.isfile(initial_file):
             self._apply_selected_file(initial_file)
 
-    # ---------------------- UI ----------------------
     def _build_ui(self):
         header = tk.Frame(self, bg=BG_DARK, height=52)
         header.pack(fill="x")
@@ -113,7 +120,8 @@ class ShutFilesApp(tk.Tk):
                                                    padx=14, pady=(18, 2))
         self.password_var = tk.StringVar()
         self.password_entry = tk.Entry(left, textvariable=self.password_var,
-                                       show="*", state="disabled", disabledbackground="#101010",
+                                       show="*", state="disabled",
+                                       disabledbackground="#101010",
                                        disabledforeground=FG_MUTED,
                                        bg="#0f0f0f", fg=ACCENT, insertbackground=ACCENT,
                                        font=(FONT, 11), relief="flat",
@@ -171,22 +179,18 @@ class ShutFilesApp(tk.Tk):
                                     font=(FONT, 10))
         self.context_menu.add_command(label="Разблокировать", command=self._on_unlock)
 
-    # ---------------------- helpers ----------------------
-    def _set_status(self, text: str):
+    def _set_status(self, text):
         self.status_var.set(text.upper())
 
-    def _activate_controls(self, enable: bool):
+    def _activate_controls(self, enable):
         if enable:
-            self.password_entry.configure(state="normal", disabledbackground="#0f0f0f",
-                                          disabledforeground=ACCENT)
+            self.password_entry.configure(state="normal")
             self.lock_btn.configure(state="normal", fg=ACCENT, bg="#3a3a00")
         else:
-            self.password_entry.configure(state="disabled",
-                                          disabledbackground="#101010",
-                                          disabledforeground=FG_MUTED)
+            self.password_entry.configure(state="disabled")
             self.lock_btn.configure(state="disabled", fg=FG_MUTED, bg="#2c2c2c")
 
-    def _apply_selected_file(self, path: str):
+    def _apply_selected_file(self, path):
         self.selected_file = os.path.abspath(path)
         self.path_var.set(self.selected_file)
         self.password_var.set("")
@@ -203,7 +207,6 @@ class ShutFilesApp(tk.Tk):
             self.listbox.insert(tk.END, f"  {os.path.basename(path)}   {tag}")
             self.listbox.itemconfigure(tk.END, foreground=FG_TEXT)
 
-    # ---------------------- events ----------------------
     def _on_browse(self):
         path = filedialog.askopenfilename(title="Выберите файл для блокировки")
         if not path:
@@ -277,7 +280,7 @@ class ShutFilesApp(tk.Tk):
         else:
             self._ask_password_and_unlock(path)
 
-    def _ask_password_and_unlock(self, path: str):
+    def _ask_password_and_unlock(self, path):
         dlg = tk.Toplevel(self)
         dlg.title("Введите пароль")
         dlg.configure(bg=BG_PANEL)
