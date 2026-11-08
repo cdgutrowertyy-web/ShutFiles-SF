@@ -1,15 +1,22 @@
 import os
+import sys
 import json
 import hashlib
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def _app_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+BASE_DIR = _app_dir()
 DB_PATH = os.path.join(BASE_DIR, "locked_files.json")
 MASTER_SECRET = "SF_MASTER_SECRET_KEY_2026"
 CHUNK_SIZE = 64 * 1024
 
 
-def derive_key(password: str) -> bytes:
-    """Превращает пароль в 32-байтный стабильный ключ через SHA-256."""
+def derive_key(password):
     if not password:
         seed = MASTER_SECRET
     else:
@@ -17,12 +24,7 @@ def derive_key(password: str) -> bytes:
     return hashlib.sha256(seed.encode("utf-8")).digest()
 
 
-def _xor_inplace(file_path: str, key: bytes) -> bool:
-    """
-    Побайтовый XOR файла "на месте" через bytearray.
-    Читает файл чанками, применяет XOR с циклическим ключом и перезаписывает
-    содержимое. Имя файла и расширение НЕ меняются.
-    """
+def _xor_inplace(file_path, key):
     try:
         key_len = len(key)
         with open(file_path, "r+b") as f:
@@ -55,11 +57,7 @@ def _xor_inplace(file_path: str, key: bytes) -> bool:
         return False
 
 
-def crypt_file(file_path: str, password: str = "") -> bool:
-    """
-    Симметричное шифрование/дешифрование XOR-ом.
-    Вызов дважды с одинаковым паролем возвращает исходный файл.
-    """
+def crypt_file(file_path, password=""):
     if not os.path.isfile(file_path):
         print(f"[SF] Файл не найден: {file_path}")
         return False
@@ -67,8 +65,7 @@ def crypt_file(file_path: str, password: str = "") -> bool:
     return _xor_inplace(file_path, key)
 
 
-def load_database() -> list:
-    """Возвращает список словарей с заблокированными файлами."""
+def load_database():
     if not os.path.exists(DB_PATH):
         return []
     try:
@@ -82,8 +79,7 @@ def load_database() -> list:
         return []
 
 
-def save_database(data: list) -> bool:
-    """Сохраняет список заблокированных файлов в скрытый JSON."""
+def save_database(data):
     try:
         tmp_path = DB_PATH + ".tmp"
         with open(tmp_path, "w", encoding="utf-8") as f:
@@ -95,7 +91,7 @@ def save_database(data: list) -> bool:
         return False
 
 
-def add_entry(file_path: str, lock_type: str) -> bool:
+def add_entry(file_path, lock_type):
     data = load_database()
     file_path = os.path.abspath(file_path)
     for entry in data:
@@ -106,7 +102,7 @@ def add_entry(file_path: str, lock_type: str) -> bool:
     return save_database(data)
 
 
-def remove_entry(file_path: str) -> bool:
+def remove_entry(file_path):
     data = load_database()
     file_path = os.path.abspath(file_path)
     new_data = [e for e in data if os.path.abspath(e.get("path", "")) != file_path]
@@ -115,7 +111,7 @@ def remove_entry(file_path: str) -> bool:
     return save_database(new_data)
 
 
-def find_entry(file_path: str):
+def find_entry(file_path):
     data = load_database()
     file_path = os.path.abspath(file_path)
     for entry in data:
